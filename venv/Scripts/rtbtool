@@ -1,0 +1,7 @@
+#!c:\users\prasun\pycharmprojects\robot_2_link\venv\scripts\python.exe
+# EASY-INSTALL-DEV-SCRIPT: 'roboticstoolbox-python==0.10.0','rtbtool'
+__requires__ = 'roboticstoolbox-python==0.10.0'
+__import__('pkg_resources').require('roboticstoolbox-python==0.10.0')
+__file__ = 'C:\\Users\\Prasun\\PycharmProjects\\Robot_2_link\\robotics-toolbox-python\\roboticstoolbox\\examples\\rtbtool'
+with open(__file__) as f:
+    exec(compile(f.read(), __file__, 'exec'))

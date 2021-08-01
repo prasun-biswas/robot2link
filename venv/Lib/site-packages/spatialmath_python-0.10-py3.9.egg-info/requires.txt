@@ -1,0 +1,6 @@
+numpy
+scipy
+matplotlib
+colored
+ansitable
+sphinxcontrib-jsmath
