@@ -15,7 +15,20 @@ import motor
 
 
 class R2Link(DHRobot):
-    def __init__(self,symbolic = False):
+    def __init__(self,symbolic = False, length0=1.5, length1=1.0,min0=-90.0,max0=90.0,maxvel0=1.0,min1=-120,max1=120,maxvel1=1.0):
+        self.length0 = length0
+        self.length1 = length1
+        self.min0 = min0
+        self.max0 = max0
+        self.maxvel0 = maxvel0
+        self.min1 = min1
+        self.max1 = max1
+        self.maxvel1 = maxvel1
+        print(f"\nvalues for R2Link robot initilization: \n {self.length0}, {self.length1},"
+              f" {self.min0},{self.min1}, {self.maxvel0}, "
+              f"{self.min1}, {self.max1}, {self.maxvel1}")
+
+
         if symbolic:
             import spatialmath.base.symbolic as sym
             zero = sym.zero()
@@ -28,13 +41,13 @@ class R2Link(DHRobot):
 
         L =[
             RevoluteDH(d = base,
-                       a = 1.5,
+                       a = self.length0,
                        alpha=0.0,
                        offset=0.0,
                        qlim=None,
                        flip=False),
             RevoluteDH(d = base,
-                       a = 1,
+                       a = self.length1,
                        alpha=0.0,
                        offset=0.0,
                        qlim=None,
@@ -51,12 +64,13 @@ class R2Link(DHRobot):
                          name="Robot 2 link",
                          keywords=('planar',)
                          )
+        print(f"robot initilization value received:\n ")
         # self.addconfiguration("qz",[1.5708,-1.5708])
         self.addconfiguration("qz",[0,0,0])
         self.addconfiguration("qz1",[1,1,0])
         self.addconfiguration("qz2",[1.5708,-1.5708,0.0])
+        self._servo_j0 = motor.servo_motor(0,'j0')
         self._servo_j1 = motor.servo_motor(0,'j1')
-        self._servo_j2 = motor.servo_motor(0,'j2')
 
 
     def solve_reachable_ikin(self,Ts):
@@ -175,12 +189,19 @@ def find_point2point_trajectory(p0, p1, step_size):
     return Ts
 
 
-def create_robot():
-    robot = R2Link()
-    print(robot)
+def create_robot(length0,length1,min0,max0,maxvel0,min1,max1,maxvel1):
+    print(f"robot link0 length0: {length0}, min0: {min0}, max0: {max0},maxvel0: {maxvel0} ")
+    print(f"robot link1 length0: {length1}, min1: {min1}, max1: {max1},maxvel1: {maxvel1} ")
+    # robot_created = R2Link(length0,length1,min0,max0,maxvel0,min1,max1,maxvel1)
+
+    # Reason for deviding length0 and length1 with 1000:
+    #       R2Link inherits DHRobot class which uses unit 'meter' for link length of the robot
+    robot_created = R2Link(length0= length0/1000,length1=length1/1000,min0=min0,max0=max0,maxvel0=maxvel0,min1=min1,max1=max1,maxvel1=maxvel1)
+
+    print(robot_created)
     print("configuration qz:")
-    print(robot.qz2)
-    return robot
+    print(robot_created.qz)
+    return robot_created
 
 # experiment block
 def rotate_j1(robot, pose):
@@ -233,15 +254,52 @@ def print_curr_joint(conn):
 
 #experiment block
 
+def read_robot_description(filename ='robot_description.txt'):
+
+    fields = None
+    try:
+        # nonlocal fields
+        f = open(filename, "r")
+        fields = f.readline().split(sep=' ')
+        print(f"successful data read from :{filename}")
+        # print(fields)
+    except:
+        print(f"failed data read from :{filename}")
+        return None
+
+    print(f"number of variables: {len(fields)}")
+    if len(fields) == 8:
+        print(f"robot description from ' {filename} ' are shown below: ")
+        print(fields)
+        # length0, length1, min0, max0, maxvel0, min1, max1, maxvel1 = fields
+        try:
+            fields_as_float = [float(x) for x in fields]
+            print(f"fields_as_float: {fields_as_float}")
+            return fields_as_float
+        except:
+            print("error: int or float expected...")
+            return []
+    else:
+        print(f"error: 8 values expected in {filename}, found {len(fields)} \n {fields}")
+        return []
 
 def main():
-    robot = create_robot()
+
+
+
+    robot_description = read_robot_description("robot_description.txt")
+    print(f"found valid description: \n{robot_description} \n ")
+    length0, length1, min0, max0, maxvel0, min1, max1, maxvel1=robot_description
+    time.sleep(1)
+    robot_created = create_robot(length0, length1, min0, max0, maxvel0, min1, max1, maxvel1)
+
     # declare 2 points for creating path
 
     # building total trajectory in parts: initial position to start position
     #                               start position to end position
     #                               end position to initial position
-    fk = robot.fkine(robot.qz2)
+    fk = robot_created.fkine(robot_created.qz2)
+
 
     print("fk:\n")
     print(fk.t)
@@ -259,105 +317,51 @@ def main():
     # print(T_p0_p1)
     # print(T_p1_pini)
 
-    # solved_joint_states_T_pini_p0 = robot.solve_reachable_ikin(T_pini_p0)
+    # solved_joint_states_T_pini_p0 = robot_created.solve_reachable_ikin(T_pini_p0)
     # print("solved_joint_states_T_pini_p0: \n ")
     # print(solved_joint_states_T_pini_p0)
     #
-    solved_joint_states = robot.solve_reachable_ikin(T_p0_p1)
-    print("solved_joint_states: \n ")
-    print(solved_joint_states)
+    # solved_joint_states = robot_created.solve_reachable_ikin(T_p0_p1)
+    # print("solved_joint_states: \n ")
+    # print(solved_joint_states)
 
-    # solved_joint_states_T_p1_pini = robot.solve_reachable_ikin(T_p1_pini)
+    # solved_joint_states_T_p1_pini = robot_created.solve_reachable_ikin(T_p1_pini)
     # print("solved_joint_states_T_p1_pini: \n")
     # print(solved_joint_states_T_p1_pini)
 
     # combine all the trajectory to create a final trajectory:
-    vel_satisfied = False
-    if len(solved_joint_states)>1:
-        vel_satisfied = R2Link.chk_joint_vel_satisfied(solved_joint_states, 1.0, 1.0, 1.0)
-        print(f"joint velocity satisfied for all steps: {vel_satisfied}")
+    # vel_satisfied = False
+    # if len(solved_joint_states)>1:
+    #     vel_satisfied = R2Link.chk_joint_vel_satisfied(solved_joint_states, 1.0, 1.0, 1.0)
+    #     print(f"joint velocity satisfied for all steps: {vel_satisfied}")
 
 
 
 
     # if vel_satisfied:
-    #     robot.execute_move(solved_joint_states)
-    # robot.plot_movement(solved_joint_states)
-    # robot.execute_move(solved_joint_states)
+    #     robot_created.execute_move(solved_joint_states)
+    # robot_created.plot_movement(solved_joint_states)
+    # robot_created.execute_move(solved_joint_states)
 
 
     #this is working to create pipe between two process
-    if vel_satisfied:
-        parent_conn, child_conn = multiprocessing.Pipe()
+    # if vel_satisfied:
+    #     parent_conn, child_conn = multiprocessing.Pipe()
+    #
+    #     p1 = multiprocessing.Process(target=execute_joint_poses, args=(parent_conn,solved_joint_states,robot_created))
+    #     p2 = multiprocessing.Process(target=print_curr_joint, args=(child_conn,))
+    #
+    #     p1.start()
+    #     p2.start()
+    #
+    #     p1.join()
+    #     p2.join()
 
-        p1 = multiprocessing.Process(target=execute_joint_poses, args=(parent_conn,solved_joint_states,robot))
-        p2 = multiprocessing.Process(target=print_curr_joint, args=(child_conn,))
-
-        p1.start()
-        p2.start()
-
-        p1.join()
-        p2.join()
-
-        print(p1.is_alive())
-
-
-
+        # print(p1.is_alive())
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     main()
-
-    # robot = R2Link()
-    # print(robot)
-    # print("configuration qz2:")
-    # robot.plot(robot.qz2)
-    # time.sleep(1)
-    # robot.plot(robot.qz1)
-    # time.sleep(1)
-    # robot.plot(robot.qz2).hold()
-
-    # fk = robot.fkine([1.5708, 0,0])
-    # fk = robot.fkine(robot.qz2)
-    #
-    # print("fk:\n")
-    # print(fk.t)
-    # print(type(fk))
-
-    # ik = robot.ikine_LM(fk)
-    # print("ik:\n")
-    # print(ik)
-    # q = ik[0]
-    # print("q: \n")
-    # print(q)
-    # robot.plot(q).hold()
-
-    # traj = jtraj(robot.qz, robot.qzn, 100)
-    # traj.q.shape
-    # print(traj.q)
-
-    # traj = jtraj(robot.qz, robot.qz2, 100)
-    # traj.q.shape
-    # print(traj.q)
-    # t = np.arange(0,1,0.01)
-    # T0 = SE3(1.5, 1.0, 0.0)
-    # T1 = SE3(1.5, 0.0, 0.0)
-    # Ts = roboticstoolbox.tools.trajectory.ctraj(T0, T1,10)
-    # print(Ts)
-    # #
-    # sol = robot.ikine_LM(Ts)
-    # print(sol)
-    # plt = qplot(traj.q)
-    # display = robot.plot(robot.qz)
-    #
-    # display.hold()
-
-    # display.step()
-    pass
-
-
-
-
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/

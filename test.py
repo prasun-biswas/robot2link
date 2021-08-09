@@ -193,4 +193,29 @@
 #     # wait until processes finish
 #     p1.join()
 #     p2.join()
+def create_robot(length0,length1,min0,max0,maxvel0,min1,max1,maxvel1):
+    print("initilized with following values: \n")
+    print(f"robot link0 length0: {length0}, min0: {min0}, max0: {max0},maxvel0: {maxvel0} ")
+    print(f"robot link1 length0: {length1}, min1: {min1}, max1: {max1},maxvel1: {maxvel1} ")
 
+    pass
+
+def read_description():
+    f = open("robot_description.txt", "r")
+    fields = f.readline().split(sep=' ')
+    print(f"number of variables: {len(fields)}")
+    if len(fields) == 8:
+        print("initializing robot with description...")
+        length0, length1, min0, max0, maxvel0, min1, max1, maxvel1 = fields
+        print(f"robot link0 length0: {length0}, min0: {min0}, max0: {max0},maxvel0: {maxvel0} ")
+        print(f"robot link1 length0: {length1}, min1: {min1}, max1: {max1},maxvel1: {maxvel1} ")
+
+        A = [float(x) for x in fields]
+        print(f"A: {A}")
+
+
+    else:
+        pass
+
+
+read_description()
