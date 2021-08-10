@@ -193,29 +193,57 @@
 #     # wait until processes finish
 #     p1.join()
 #     p2.join()
-def create_robot(length0,length1,min0,max0,maxvel0,min1,max1,maxvel1):
-    print("initilized with following values: \n")
-    print(f"robot link0 length0: {length0}, min0: {min0}, max0: {max0},maxvel0: {maxvel0} ")
-    print(f"robot link1 length0: {length1}, min1: {min1}, max1: {max1},maxvel1: {maxvel1} ")
 
-    pass
+import math
 
-def read_description():
-    f = open("robot_description.txt", "r")
-    fields = f.readline().split(sep=' ')
-    print(f"number of variables: {len(fields)}")
-    if len(fields) == 8:
-        print("initializing robot with description...")
-        length0, length1, min0, max0, maxvel0, min1, max1, maxvel1 = fields
-        print(f"robot link0 length0: {length0}, min0: {min0}, max0: {max0},maxvel0: {maxvel0} ")
-        print(f"robot link1 length0: {length1}, min1: {min1}, max1: {max1},maxvel1: {maxvel1} ")
+# def create_robot(length0,length1,min0,max0,maxvel0,min1,max1,maxvel1):
+#     print("initilized with following values: \n")
+#     print(f"robot link0 length0: {length0}, min0: {min0}, max0: {max0},maxvel0: {maxvel0} ")
+#     print(f"robot link1 length0: {length1}, min1: {min1}, max1: {max1},maxvel1: {maxvel1} ")
+#
+#     pass
+#
+# def read_description(filename, robot=True,path = False, sep = ' '):
+#     if robot==True and path == False:
+#         f = open(filename, "r")
+#         fields = f.readline().split(sep=sep)
+#         print(f"number of variables: {len(fields)}")
+#         if len(fields) == 8:
+#             print("initializing robot with description...")
+#             A = [float(x) for x in fields]
+#             print(f"A: {A}")
+#             length0, length1, min0, max0, maxvel0, min1, max1, maxvel1 = A
+#             print(f"robot link0 length0: {length0}, min0: {min0}, max0: {max0},maxvel0: {maxvel0} ")
+#             print(f"robot link1 length0: {length1}, min1: {min1}, max1: {max1},maxvel1: {maxvel1} ")
+#
+#             print(f"angle in radians> {round(math.radians(min0),6)}, {math.radians(max0)}")
+#         else:
+#             pass
 
-        A = [float(x) for x in fields]
-        print(f"A: {A}")
+# read_description('robot_description.txt',robot=True, path= False)
 
 
-    else:
-        pass
+def read_path_description(filename, sep = ' '):
+    f = open(filename, 'r')
+    fields = f.readlines()
 
+    store_lines = []
+    print(len(fields))
+    for line in fields:
+        fields = line.split(sep)
+        print(fields)
+        try:
+            fields_as_float = [float(x) for x in fields]
+            store_lines.append(fields_as_float)
+            print(f"fields_as_float: {fields_as_float}")
+        except:
+            print("error: int or float expected...")
+            return []
+    print(f"firsr line {store_lines[0]} and last line {store_lines[-1]}")
 
-read_description()
+read_path_description('path_point.txt')
+
+# 1.5 1.0 0.0 1.5 0.0 0.0
+# 1.5 0.0 0.0 2.0 0.0 0.0
+# 2.0 0.0 0.0 2.0 1.0 0.0
+# 2.0 1.0 0.0 1.5 1.0 0.0

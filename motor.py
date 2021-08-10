@@ -43,7 +43,7 @@ def diff_angle(x,y):
 
     pass
 
-if __name__ == '__main__':
-    main()
+# if __name__ == '__main__':
+#     main()
 
 
