@@ -327,6 +327,21 @@ def read_path_description(filename='path_point.txt', sep = ' '):
     return all_path_points
 
 
+def execute_with_multiprocess(solved_joint_states_T_ini_to_work_start,robot_created):
+    parent_conn, child_conn = multiprocessing.Pipe()
+
+    p1 = multiprocessing.Process(target=execute_joint_poses,
+                                 args=(parent_conn, solved_joint_states_T_ini_to_work_start, robot_created))
+    p2 = multiprocessing.Process(target=print_curr_joint, args=(child_conn,))
+
+    p1.start()
+    p2.start()
+
+    p1.join()
+    p2.join()
+
+    return True
+
 
 def main():
     robot_description = read_robot_description("robot_description.txt")
@@ -477,18 +492,28 @@ def main():
     time.sleep(3)
 
     if vel_satisfied_T_ini_to_work_start and vel_satisfied_T_work_end_to_ini:
-        parent_conn, child_conn = multiprocessing.Pipe()
 
-        p1 = multiprocessing.Process(target=execute_joint_poses, args=(parent_conn,solved_joint_states_T_ini_to_work_start,robot_created))
-        p2 = multiprocessing.Process(target=print_curr_joint, args=(child_conn,))
+        execution = execute_with_multiprocess(solved_joint_states_T_ini_to_work_start,robot_created)
+        print(f" robot moved to work_start position: {execution}")
 
-        p1.start()
-        p2.start()
+        execution1 = execute_with_multiprocess(solved_joint_states_T_work_end_to_ini, robot_created)
+        print(f" robot moved to init position: {execution1}")
+    #     parent_conn, child_conn = multiprocessing.Pipe()
+    #
+    #     p1 = multiprocessing.Process(target=execute_joint_poses, args=(parent_conn,solved_joint_states_T_ini_to_work_start,robot_created))
+    #     p2 = multiprocessing.Process(target=print_curr_joint, args=(child_conn,))
+    #
+    #     p1.start()
+    #     p2.start()
+    #
+    #     p1.join()
+    #     p2.join()
+    #
+    #
+    #
+    #
+    # print(p1.is_alive())
 
-        p1.join()
-        p2.join()
-
-    print(p1.is_alive())
 
 
     #step 2: from work_start position to work_end position
