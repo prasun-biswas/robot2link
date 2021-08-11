@@ -1,3 +1,6 @@
+#############################
+# Why are you adding this comments is this copied
+#############################
 # This is a sample Python script......
 
 # Press Shift+F10 to execute it or replace it with your code.
@@ -9,6 +12,9 @@ from roboticstoolbox import *
 from spatialmath import SE3
 from collections import OrderedDict
 from spatialmath import base
+#############################
+# Where have you used threading, check your imports are needed, remove unnecessary import
+#############################
 import multiprocessing, threading
 import motor
 
@@ -73,10 +79,16 @@ class R2Link(DHRobot):
         self._servo_j0 = motor.servo_motor(0, 'j0')
         self._servo_j1 = motor.servo_motor(0, 'j1')
 
+#############################
+# Add what the method is supposed to do
+#############################
     def solve_reachable_ikin(self, Ts):
         # check if all the path points are reachable by the robot
         sol = self.ikine_LM(Ts)
-
+        
+#############################
+# Remove prints which just clutter the console
+#############################
         print("ikine Solution: \n")
         # print(sol)
         set_a = set(sol.success)
@@ -127,6 +139,10 @@ class R2Link(DHRobot):
         print(f"\nchecking joint vel condition: maxvel_j0: {self.maxvel0}, maxvel_j1: {self.maxvel1} \n  ")
 
         def diff_angle(x, y, joint='joint'):
+#############################
+# can define PI as a global constant
+#############################
+
             PI = math.pi
             angle = min((2 * PI) - abs(x - y), abs(x - y))
             # print(f"angle diff of {joint}: rad {angle} or deg: {np.rad2deg(angle)}")
@@ -183,6 +199,10 @@ def find_point2point_trajectory(p0, p1, step_size):
     Ts = roboticstoolbox.tools.trajectory.ctraj(T0, T1, int(step))
     # print(Ts)
     # sol = robot.ikine_LM(Ts)
+#############################
+# Cleanup debug prints, you can use this https://stackoverflow.com/questions/6579496/using-print-statements-only-to-debug
+#############################
+
     print("\n")
     return Ts
 
@@ -231,7 +251,9 @@ def find_solved_joint_states_multiple_points(work_path_points,robot_created):
 
     return work_path_solved_joint_states
 
-
+#############################
+# Can create robot description file, but not required now.
+#############################
 def create_robot(length0, length1, min0, max0, maxvel0, min1, max1, maxvel1):
     print("values received at function: create_robot()")
     print(f"robot link0 length0: {length0}, min0: {min0}, max0: {max0},maxvel0: {maxvel0} ")
@@ -331,7 +353,9 @@ def read_path_description(filename='path_point.txt', sep = ' '):
 
     return all_path_points
 
-
+#############################
+# Specify in report why multi processing??
+#############################
 def execute_joint_poses(conn, poses, robot):
     """ executes the poses in loop.
         this shares a connection 'conn' with multiprocessing() pipe.
@@ -429,6 +453,9 @@ def main(argv):
     p_ini = np.array(fk.t)
     # p0 = np.array([1.5, 1.0, 0.0])
     # p1 = np.array([1.5, 0.0, 0.0])
+#############################
+# check with other points
+#############################
     p_work_start = []
     p_work_end = []
 
