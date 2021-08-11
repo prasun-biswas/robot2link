@@ -3,7 +3,7 @@
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 import math
-import sched, time
+import sys, getopt, time
 import numpy as np
 from roboticstoolbox import *
 from spatialmath import SE3
@@ -116,11 +116,10 @@ class R2Link(DHRobot):
             # print(item)
             self.plot(item)
             time.sleep(0.001)
-        # self.plot(joint_states[-1]).hold()
+        self.plot(joint_states[-1]).hold()
 
         pass
 
-    # @staticmethod
     def chk_joint_vel_satisfied(self, joint_states, speed: float=1.0):
         time_step = 1 / speed
         failed_vel_at_step = OrderedDict()
@@ -188,6 +187,51 @@ def find_point2point_trajectory(p0, p1, step_size):
     return Ts
 
 
+def find_solved_joint_states_multiple_points(work_path_points,robot_created):
+    work_path_solved_joint_states = np.array([[0.0, 0.0 ,0.0]])
+    print(f"\nnumber of lines in work_path_points-> {len(work_path_points)} \n")
+
+    line_count=0
+    for path in work_path_points:
+        # print(path)
+        line_count += 1
+        p0 = np.array([path[0], path[1], path[2]])
+        p1 = np.array([path[3], path[4], path[5]])
+        print(f"from p0: {p0} to p1: {p1}")
+        T_p0_p1 = find_point2point_trajectory(p0, p1, 10)
+        print(f"number of steps in Trajectory: {len(T_p0_p1)}")
+        solved_joint_states = robot_created.solve_reachable_ikin(T_p0_p1)
+
+        if len(solved_joint_states) == 0:
+            print(f"\n unreachable goal at line{line_count} for {p0} to {p1} \n")
+            if path[1] == path[4] == 0.0:
+                print(f"failure is caused by Zero(0.0) value due to mathematical reason...\n"
+                      f"try again by slightly changing value to non-Zero value")
+                p0_mod = np.array([path[0], path[1] + 0.000001, path[2]])
+                p1_mod = np.array([path[3], path[4] + 0.000001, path[5]])
+
+                T_p0_p1_mod = find_point2point_trajectory(p0_mod, p1_mod, 10)
+                print(f"number of steps in Trajectory: {len(T_p0_p1_mod)}")
+                solved_joint_states_mod = robot_created.solve_reachable_ikin(T_p0_p1_mod)
+                if len(solved_joint_states_mod) == 0:
+                    print(f"error again after modification: unreachable goal at line{line_count} for {p0} to {p1} \n")
+                else:
+                    work_path_solved_joint_states =np.concatenate((work_path_solved_joint_states,solved_joint_states_mod))
+                    # print(solved_joint_states_mod)
+                    print(f"solved for line: {line_count} from p0: {p0} to p1: {p1}")
+
+        else:
+            # print(solved_joint_states)
+            work_path_solved_joint_states = np.concatenate((work_path_solved_joint_states,solved_joint_states))
+        time.sleep(1)
+
+    print(f"length of total work_path_solved_joint_states is {len(work_path_solved_joint_states)} \n")
+    work_path_solved_joint_states = np.delete(work_path_solved_joint_states,0,0)
+    # print(work_path_solved_joint_states)
+
+    return work_path_solved_joint_states
+
+
 def create_robot(length0, length1, min0, max0, maxvel0, min1, max1, maxvel1):
     print("values received at function: create_robot()")
     print(f"robot link0 length0: {length0}, min0: {min0}, max0: {max0},maxvel0: {maxvel0} ")
@@ -214,45 +258,6 @@ def rotate_j1(robot, pose):
 def rotate_j2(robot, pose):
     robot._servo_j2.rotate(pose)
 
-
-def execute_joint_poses(conn, poses, robot):
-    """ executes the poses in loop.
-        this shares a connection 'conn' with multiprocessing() pipe.
-            receives updated joint position via pipe and prints the msg
-            """
-
-    print("executing joint poses: ")
-
-    start_time = time.time()
-
-    for pose in poses:
-        robot._servo_j0.rotate(pose[0])
-        robot._servo_j1.rotate(pose[1])
-        conn.send(pose)
-        time.sleep(0.1)
-    x = np.array([], dtype=np.float64)
-    conn.send(x)
-    return
-
-
-def print_curr_joint(conn):
-    """
-        this shares a connection 'conn' with multiprocessing() pipe.
-        receives updated joint position via pipe and prints the msg
-    """
-
-    start_time = time.time()
-    x = np.array([], dtype=np.float64)
-    while True:
-        msg = conn.recv()
-        # print(f"received message {msg}")
-        interval = time.time() - start_time
-        if interval >= 0.1:
-            print(f"received message {msg}")
-            start_time = time.time()
-        if np.array_equal(msg, x):
-            print("empty array received")
-            break
 
 
 
@@ -327,7 +332,51 @@ def read_path_description(filename='path_point.txt', sep = ' '):
     return all_path_points
 
 
+def execute_joint_poses(conn, poses, robot):
+    """ executes the poses in loop.
+        this shares a connection 'conn' with multiprocessing() pipe.
+            receives updated joint position via pipe and prints the msg
+            """
+
+    print("executing joint poses: ")
+
+    start_time = time.time()
+
+    for pose in poses:
+        robot.plot(pose)
+        robot._servo_j0.rotate(pose[0])
+        robot._servo_j1.rotate(pose[1])
+        conn.send(pose)
+        time.sleep(0.1)
+    x = np.array([], dtype=np.float64)
+    conn.send(x)
+    return
+
+
+def print_curr_joint(conn):
+    """
+        this shares a connection 'conn' with multiprocessing() pipe.
+        receives updated joint position via pipe and prints the msg
+    """
+
+    start_time = time.time()
+    x = np.array([], dtype=np.float64)
+    while True:
+        msg = conn.recv()
+        # print(f"received message {msg}")
+        interval = time.time() - start_time
+        if np.array_equal(msg, x):
+            print("> empty array received: (process ended)")
+            break
+        if interval >= 0.1:
+            print(f"joint states j0> {math.degrees(msg[0])}, j1> {math.degrees(msg[1])}")
+            start_time = time.time()
+
+
+
+
 def execute_with_multiprocess(solved_joint_states_T_ini_to_work_start,robot_created):
+
     parent_conn, child_conn = multiprocessing.Pipe()
 
     p1 = multiprocessing.Process(target=execute_joint_poses,
@@ -343,8 +392,25 @@ def execute_with_multiprocess(solved_joint_states_T_ini_to_work_start,robot_crea
     return True
 
 
-def main():
-    robot_description = read_robot_description("robot_description.txt")
+def main(argv):
+
+    robot_file = ''
+    path_file = ''
+    try:
+        opts, args = getopt.getopt(argv, ["ifile=", "ofile="])
+        print(f"args are: {opts} and {args}")
+        if len(args) == 2:
+            robot_file, path_file = args
+    except getopt.GetoptError:
+        print('test.py -i <robot_file> -o <path_file>')
+        sys.exit(2)
+    print(f'\nrobot_file file is: {robot_file} path_file file is: {path_file}\n')
+
+
+
+    # robot_description = read_robot_description("robot_description.txt")
+    robot_description = read_robot_description(robot_file)
+
     print(f"found valid description: \n{robot_description} \n ")
     length0, length1, min0, max0, maxvel0, min1, max1, maxvel1 = robot_description
     time.sleep(1)
@@ -367,42 +433,18 @@ def main():
     p_work_end = []
 
 
-    work_path_points = read_path_description('path_point.txt')
+    # work_path_points = read_path_description('path_point.txt')
+    work_path_points = read_path_description(path_file)
+
+    solved_joint_states_work_path_points = []
 
     if work_path_points:
-        line_count = 0
+
         p_work_start = np.array(work_path_points[0][:3])
         p_work_end = np.array(work_path_points[-1][3:6])
-        # print(f"p_work_start: {p_work_start}")
-        # print(f"p_work_end: {p_work_end}")
-
-        # for path in work_path_points:
-        #     # print(path)
-        #     line_count+=1
-        #     p0 = np.array([path[0],path[1],path[2]])
-        #     p1 = np.array([path[3],path[4],path[5]])
-        #     print(f"from p0: {p0} to p1: {p1}")
-        #     T_p0_p1 = find_point2point_trajectory(p0, p1, 10)
-        #     print(f"number of steps in Trajectory: {len(T_p0_p1)}")
-        #     solved_joint_states = robot_created.solve_reachable_ikin(T_p0_p1)
-        #
-        #     if len(solved_joint_states)==0:
-        #         print(f"\n unreachable goal at line{line_count} for {p0} to {p1} \n")
-        #         if path[1]==path[4]==0.0:
-        #             print(f"failure is caused by Zero(0.0) value due to mathematical reason...\n"
-        #                   f"try again by slightly changing value to non-Zero value")
-        #             p0_mod = np.array([path[0], path[1]+0.000001, path[2]])
-        #             p1_mod = np.array([path[3], path[4]+0.000001, path[5]])
-        #
-        #             T_p0_p1_mod = find_point2point_trajectory(p0_mod, p1_mod, 10)
-        #             print(f"number of steps in Trajectory: {len(T_p0_p1_mod)}")
-        #             solved_joint_states_mod = robot_created.solve_reachable_ikin(T_p0_p1_mod)
-        #             if len(solved_joint_states_mod)==0:
-        #                 print(f"error again after modification: unreachable goal at line{line_count} for {p0} to {p1} \n")
-        #             else:
-        #                 print(f"solved for line: {line_count} from p0: {p0} to p1: {p1}")
-        #
-        #     time.sleep(1)
+        print(f"p_work_start: {p_work_start}")
+        print(f"p_work_end: {p_work_end}")
+        solved_joint_states_work_path_points = find_solved_joint_states_multiple_points(work_path_points,robot_created)
 
 
     else:
@@ -423,7 +465,7 @@ def main():
 
     solved_joint_states_T_ini_to_work_start = robot_created.solve_reachable_ikin(T_ini_to_work_start)
     # print("solved_joint_states_T_pini_p0: \n ")
-    # print(solved_joint_states_T_pini_p0)
+    # print(solved_joint_states_T_ini_to_work_start)
     # #
     # solved_joint_states = robot_created.solve_reachable_ikin(T_p0_p1)
     # print("solved_joint_states: \n ")
@@ -454,13 +496,13 @@ def main():
 
     #step 2: from work_start position to work_end position
 
-    # vel_satisfied = False
-    #
-    # if len(solved_joint_states)>1:
-    #     print(f"calling chk_joint_vel_satisfied: maxvel_j0: {robot_created.maxvel0}, maxvel_j1: {robot_created.maxvel1}")
-    #     vel_satisfied = robot_created.chk_joint_vel_satisfied(solved_joint_states, 3)
-    #     print(f"joint velocity satisfied for all steps: {vel_satisfied}")
-    # print(vel_satisfied)
+    vel_satisfied_work_path_points = False
+
+    if len(solved_joint_states_work_path_points)>1:
+        print(f"calling chk_joint_vel_satisfied: maxvel_j0: {robot_created.maxvel0}, maxvel_j1: {robot_created.maxvel1}")
+        vel_satisfied_work_path_points = robot_created.chk_joint_vel_satisfied(solved_joint_states_work_path_points, 1)
+        print(f"joint velocity satisfied for all steps: {vel_satisfied_work_path_points}")
+    print(vel_satisfied_work_path_points)
 
     #step 3: from work_end position to initial position
 
@@ -468,14 +510,11 @@ def main():
 
     if len(solved_joint_states_T_work_end_to_ini)>1:
         print(f"calling chk_joint_vel_satisfied: maxvel_j0: {robot_created.maxvel0}, maxvel_j1: {robot_created.maxvel1}")
-        vel_satisfied_T_work_end_to_ini = robot_created.chk_joint_vel_satisfied(solved_joint_states_T_work_end_to_ini, 3)
+        vel_satisfied_T_work_end_to_ini = robot_created.chk_joint_vel_satisfied(solved_joint_states_T_work_end_to_ini, 1)
         print(f"joint vel_satisfied_T_work_end_to_ini for all steps: {vel_satisfied_T_work_end_to_ini}")
     print(vel_satisfied_T_work_end_to_ini)
 
-    # if vel_satisfied:
-    #     robot_created.execute_move(solved_joint_states)
-    # robot_created.plot_movement(solved_joint_states)
-    # robot_created.execute_move(solved_joint_states)
+
 
     """
         if velocity condition is satisfied for all 3 steps of the trajectory within the limit of robot's 
@@ -488,70 +527,46 @@ def main():
 
     #step 1: from initial position to work_start position
 
+
     print("movement execution will start in 3 seconds... ")
     time.sleep(3)
 
-    if vel_satisfied_T_ini_to_work_start and vel_satisfied_T_work_end_to_ini:
+    if vel_satisfied_T_ini_to_work_start and vel_satisfied_work_path_points and vel_satisfied_T_work_end_to_ini:
+
+        # step 1: from initial position to work_start position
 
         execution = execute_with_multiprocess(solved_joint_states_T_ini_to_work_start,robot_created)
         print(f" robot moved to work_start position: {execution}")
+        # step 2: from work_start position to work_end position
 
-        execution1 = execute_with_multiprocess(solved_joint_states_T_work_end_to_ini, robot_created)
-        print(f" robot moved to init position: {execution1}")
-    #     parent_conn, child_conn = multiprocessing.Pipe()
-    #
-    #     p1 = multiprocessing.Process(target=execute_joint_poses, args=(parent_conn,solved_joint_states_T_ini_to_work_start,robot_created))
-    #     p2 = multiprocessing.Process(target=print_curr_joint, args=(child_conn,))
-    #
-    #     p1.start()
-    #     p2.start()
-    #
-    #     p1.join()
-    #     p2.join()
-    #
-    #
-    #
-    #
-    # print(p1.is_alive())
+        execution1 = execute_with_multiprocess(solved_joint_states_work_path_points,robot_created)
+        print(f" robot moved to work_start position: {execution1}")
 
+        # step 3: from work_end position to initial position
+        execution2 = execute_with_multiprocess(solved_joint_states_T_work_end_to_ini, robot_created)
+        print(f" robot moved to init position: {execution2}")
 
+        # if execution and execution1 and execution2:
+        #
+        #     print(f"\ncombining all joint states for trajectory visualization:...")
+        #
+        #     all_joint_states = np.array([[1.5708, -1.5708, 0.0]])
+        #     all_joint_states = np.concatenate((all_joint_states, solved_joint_states_T_ini_to_work_start))
+        #     all_joint_states = np.concatenate((all_joint_states, solved_joint_states_work_path_points))
+        #     all_joint_states = np.concatenate((all_joint_states, solved_joint_states_T_work_end_to_ini))
+        #     all_joint_states = np.concatenate((all_joint_states,np.array([[1.5708, -1.5708, 0.0]])))
+        #
+        #     print(f" combining all joint states: successful")
+        #
+        #     print(f" starting plotting for visualization:...")
+        #
+        #     robot_created.plot_movement(all_joint_states)
 
-    #step 2: from work_start position to work_end position
-
-    # this is working to create pipe between two process
-    # if vel_satisfied:
-    #     parent_conn, child_conn = multiprocessing.Pipe()
-    #
-    #     p1 = multiprocessing.Process(target=execute_joint_poses, args=(parent_conn,solved_joint_states,robot_created))
-    #     p2 = multiprocessing.Process(target=print_curr_joint, args=(child_conn,))
-    #
-    #     p1.start()
-    #     p2.start()
-    #
-    #     p1.join()
-    #     p2.join()
-
-    # print(p1.is_alive())
-
-    #step 3: from work_end position to initial position
-
-    # if vel_satisfied:
-    #     parent_conn, child_conn = multiprocessing.Pipe()
-    #
-    #     p1 = multiprocessing.Process(target=execute_joint_poses, args=(parent_conn,solved_joint_states,robot_created))
-    #     p2 = multiprocessing.Process(target=print_curr_joint, args=(child_conn,))
-    #
-    #     p1.start()
-    #     p2.start()
-    #
-    #     p1.join()
-    #     p2.join()
-
-    # print(p1.is_alive())
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    main()
+    # main()
+    main(sys.argv[1:])
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/

@@ -11,7 +11,7 @@ class servo_motor():
 
     def rotate(self,new_pos):
         self._curr_pos = new_pos
-        print(f"curr pose {self._joint_name}: {self._curr_pos}")
+        # print(f"curr pose {self._joint_name}: {self._curr_pos}")
         return True
     @property
     def get_curr_pose(self):
