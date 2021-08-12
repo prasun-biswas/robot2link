@@ -1,21 +1,41 @@
-# This is a sample Python script.
-
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+"""
+author@ Prasun Biswas
+"""
 import math
 import sys, getopt, time
 import numpy as np
 from roboticstoolbox import *
 from spatialmath import SE3
 from collections import OrderedDict
-from spatialmath import base
-import multiprocessing, threading
+import multiprocessing
 import motor
 
 
 class R2Link(DHRobot):
+    """
+        This solution is built with roboticstoolbox library.
+
+        R2Link class is written by inheriting DHRobot class from roboticstoolbox library.
+        Class for robots defined using Denavit-Hartenberg notation
+        using DHRobot class robot is configured. This library allows to build robot with
+        joint angle rotation limitation. Also, this library calculates forward and inverse
+        kinematics for defined robot configuration.
+
+    """
+
     def __init__(self, symbolic=False, length0=1.5, length1=1.0, min0=-90.0, max0=90.0, maxvel0=1.0, min1=-120,
                  max1=120, maxvel1=1.0):
+        """
+
+        :param length0: length of first link in meter
+        :param length1: length of second link in meter
+        :param min0: min rotation angle of j0 in degree
+        :param max0: max rotation angle of j0 in degree
+        :param maxvel0: maximum angular velocity
+        :param min1: min rotation angle of j1 in degree
+        :param max1: max rotation angle of j1 in degree
+        :param maxvel1: maximum rotation velocity
+        """
 
         self.length0 = length0
         self.length1 = length1
@@ -65,8 +85,9 @@ class R2Link(DHRobot):
                          name="Robot 2 link",
                          keywords=('planar',)
                          )
-        print(f"robot initilization value received:\n ")
         # self.addconfiguration("qz",[1.5708,-1.5708])
+        # the configuration creates different poses for robot using joint angle.
+        # for this solution default starting pose is qz2: [1.5708, -1.5708, 0.0]
         self.addconfiguration("qz", [0, 0, 0])
         self.addconfiguration("qz1", [1, 1, 0])
         self.addconfiguration("qz2", [1.5708, -1.5708, 0.0])
@@ -74,11 +95,19 @@ class R2Link(DHRobot):
         self._servo_j1 = motor.servo_motor(0, 'j1')
 
     def solve_reachable_ikin(self, Ts):
-        # check if all the path points are reachable by the robot
+        """
+            this method checks if all the Transformation matrix is reachable by the
+            configured robot. inverse kinematics to find the valid poses are calculated
+            by using ikine_LM method of DHRobot class inherited is used to solve for
+            reachable targets. Ikine_LM uses Numerical inverse kinematics by
+            Levenberg-Marquadt optimization(Robot superclass)
+
+        :param Ts: trajectory for a point to point movements
+        :return: solved joint states if all points are reachable
+        """
         sol = self.ikine_LM(Ts)
 
         print("ikine Solution: \n")
-        # print(sol)
         set_a = set(sol.success)
         print(set_a)
         if False in set_a:
@@ -86,41 +115,44 @@ class R2Link(DHRobot):
             itemindex = np.where(sol.success == False)
             print(f"unreachable goal:{count_false} at {itemindex[0]}")
             if count_false == 1 and itemindex[0] == 0:
-                print("false alarm at first position")
+                # sometimes there are zero values at the first position of array which results alse
+                # f warning of unreachable goal. As a bug fix the value is deleted from numpy array
+
+                print("false warning at first position")
                 q_modified = np.delete(sol.q, 0, 0)
                 print("(q_modified) all pathpoints are reachable: \n")
-                # print(q_modified)
                 return q_modified
 
         else:
             print("all pathpoints are reachable")
+            # sol.q has all the solved valid poses. other un-necessary values are ignored
             return sol.q
-
+        # returns empty if inverse kinematics  fails
         return []
 
     def plot_movement(self, joint_states):
-
         """
-        this plots the movements in 3d space
-        :param joint_states:
+        this plots the movements of the configured robot in 3d space
+        :param joint_states: all the joint states the robot need to execute
         :return:
         """
-
         print("received joint states to show: \n")
-
-        # print(joint_states)
-
-        # combine begin, task, end poses
-
         for item in joint_states:
             # print(item)
             self.plot(item)
             time.sleep(0.001)
         self.plot(joint_states[-1]).hold()
 
-        pass
+    def chk_joint_vel_satisfied(self, joint_states, speed: float = 1.0):
+        """
+            This method checks if the robot's angular velocity limitation allows the robot to execute all the
+            movements along trajectory for all joints along all the points at a certain speed. The process is
+            finds the angular difference between 2 positions and the speed for each steps.
 
-    def chk_joint_vel_satisfied(self, joint_states, speed: float=1.0):
+        :param joint_states:
+        :param speed:
+        :return:
+        """
         time_step = 1 / speed
         failed_vel_at_step = OrderedDict()
 
@@ -147,7 +179,6 @@ class R2Link(DHRobot):
                 print(f"angular velocity limit exceeds for at step {x}")
                 failed_vel_at_step[x] = {False: [joint_states[x, 0], joint_states[x, 1]]}
 
-
         if len(failed_vel_at_step):
             print("all failed velocity steps: \n")
             print(failed_vel_at_step)
@@ -161,10 +192,11 @@ class R2Link(DHRobot):
 
 def find_point2point_trajectory(p0, p1, step_size):
     """
-    finds pathpoints to create a trajectory between 2 points
+    This function finds path points to create a trajectory between 2 points with desired number of steps from point
+    to point roboticstoolbox library have ctraj() method that finds trajectory in cartesian space along a straight line.
     :param p0:
     :param p1:
-    :return:
+    :return: trajectory consists of path points
     """
     # dist in meters
     print("finding trajectory: ")
@@ -187,11 +219,21 @@ def find_point2point_trajectory(p0, p1, step_size):
     return Ts
 
 
-def find_solved_joint_states_multiple_points(work_path_points,robot_created):
-    work_path_solved_joint_states = np.array([[0.0, 0.0 ,0.0]])
+def find_solved_joint_states_multiple_points(work_path_points, robot_created):
+    """
+    This Function finds solved reachable joint states for all the points in a trajectory for a specified robot.
+    this is a combination of two previously defined methods above find_point2point_trajectory() and
+    solve_reachable_ikin() to find the total solution at a time for all the points in described goal points.
+
+    :param work_path_points:
+    :param robot_created:
+    :return: all the solved path point reachable by robot
+    """
+
+    work_path_solved_joint_states = np.array([[0.0, 0.0, 0.0]])
     print(f"\nnumber of lines in work_path_points-> {len(work_path_points)} \n")
 
-    line_count=0
+    line_count = 0
     for path in work_path_points:
         # print(path)
         line_count += 1
@@ -216,23 +258,38 @@ def find_solved_joint_states_multiple_points(work_path_points,robot_created):
                 if len(solved_joint_states_mod) == 0:
                     print(f"error again after modification: unreachable goal at line{line_count} for {p0} to {p1} \n")
                 else:
-                    work_path_solved_joint_states =np.concatenate((work_path_solved_joint_states,solved_joint_states_mod))
+                    work_path_solved_joint_states = np.concatenate(
+                        (work_path_solved_joint_states, solved_joint_states_mod))
                     # print(solved_joint_states_mod)
                     print(f"solved for line: {line_count} from p0: {p0} to p1: {p1}")
 
         else:
             # print(solved_joint_states)
-            work_path_solved_joint_states = np.concatenate((work_path_solved_joint_states,solved_joint_states))
+            work_path_solved_joint_states = np.concatenate((work_path_solved_joint_states, solved_joint_states))
         time.sleep(1)
 
     print(f"length of total work_path_solved_joint_states is {len(work_path_solved_joint_states)} \n")
-    work_path_solved_joint_states = np.delete(work_path_solved_joint_states,0,0)
+    work_path_solved_joint_states = np.delete(work_path_solved_joint_states, 0, 0)
     # print(work_path_solved_joint_states)
 
     return work_path_solved_joint_states
 
 
 def create_robot(length0, length1, min0, max0, maxvel0, min1, max1, maxvel1):
+    """
+        This function create a robot from the all the fields retrieved from the robot description file.
+        The created robot is an instance of R2Link class which inherits DHRobot class to create a robot
+        using DH parameters.
+    ::param length0: length of first link in meter
+        :param length1: length of second link in meter
+        :param min0: min rotation angle of j0 in degree
+        :param max0: max rotation angle of j0 in degree
+        :param maxvel0: maximum angular velocity
+        :param min1: min rotation angle of j1 in degree
+        :param max1: max rotation angle of j1 in degree
+        :param maxvel1: maximum rotation velocity
+    :return: robot as an instance of R2Link class
+    """
     print("values received at function: create_robot()")
     print(f"robot link0 length0: {length0}, min0: {min0}, max0: {max0},maxvel0: {maxvel0} ")
     print(f"robot link1 length0: {length1}, min1: {min1}, max1: {max1},maxvel1: {maxvel1} ")
@@ -241,29 +298,26 @@ def create_robot(length0, length1, min0, max0, maxvel0, min1, max1, maxvel1):
     # Reason for deviding length0 and length1 with 1000:
     #       R2Link inherits DHRobot class which uses unit 'meter' for link length of the robot
     robot_created = R2Link(length0=length0 / 1000, length1=length1 / 1000,
-                           min0=round(math.radians(min0),5), max0=round(math.radians(max0),5), maxvel0=round(math.radians(maxvel0),5),
-                           min1=round(math.radians(min1),5), max1=round(math.radians(max1),5), maxvel1=round(math.radians(maxvel1),5))
+                           min0=round(math.radians(min0), 5), max0=round(math.radians(max0), 5),
+                           maxvel0=round(math.radians(maxvel0), 5),
+                           min1=round(math.radians(min1), 5), max1=round(math.radians(max1), 5),
+                           maxvel1=round(math.radians(maxvel1), 5))
 
     print(robot_created)
-    print("configuration qz:")
+    print("Robot has initial configuration qz:")
     print(robot_created.qz)
     return robot_created
 
 
-# experiment block
-def rotate_j1(robot, pose):
-    robot._servo_j1.rotate(pose)
-
-
-def rotate_j2(robot, pose):
-    robot._servo_j2.rotate(pose)
-
-
-
-
-# experiment block
-
-def read_robot_description(filename='robot_description.txt',sep = ' '):
+def read_robot_description(filename='robot_description.txt', sep=' '):
+    """
+        This function reads the robot's description file and check for validity of data type
+        and number of fields. If the description is valid then the fields are returned to be
+        used to create a robot using DH parameters.
+    :param filename:
+    :param sep:
+    :return: robot's description as an array
+    """
     fields = None
     try:
         # nonlocal fields
@@ -292,7 +346,16 @@ def read_robot_description(filename='robot_description.txt',sep = ' '):
         return []
 
 
-def read_path_description(filename='path_point.txt', sep = ' '):
+def read_path_description(filename='path_point.txt', sep=' '):
+    """
+        This function reads the work path point description file and check for validity of data type
+        and number of fields. If the description is valid then the fields are returned to be
+        used to create trajectory to be executed by robot within it's workspace.
+
+    :param filename:
+    :param sep:
+    :return: array
+    """
     print("reading path description consists of points...")
     lines = None
     all_path_points = []
@@ -307,11 +370,11 @@ def read_path_description(filename='path_point.txt', sep = ' '):
     except:
         print(f"failed data read from :{filename}")
         return None
-    line_count =0
+    line_count = 0
     for line in lines:
         fields = line.split(sep)
         print(fields)
-        line_count+=1
+        line_count += 1
 
         print(f"number of variables: {len(fields)}")
         if len(fields) == 6:
@@ -326,17 +389,19 @@ def read_path_description(filename='path_point.txt', sep = ' '):
                 print("error: int or float expected...")
                 return []
         else:
-            print(f"error: 6 values expected in each line {filename}, found {len(fields)} in line{line_count} \n {fields}")
+            print(
+                f"error: 6 values expected in each line {filename}, found {len(fields)} in line{line_count} \n {fields}")
             return []
 
     return all_path_points
 
 
 def execute_joint_poses(conn, poses, robot):
-    """ executes the poses in loop.
-        this shares a connection 'conn' with multiprocessing() pipe.
-            receives updated joint position via pipe and prints the msg
-            """
+    """
+        executes the poses in a loop with a desired speed. this shares a connection 'conn' with
+        multiprocessing() pipe. receives updated joint position via pipe and sends the joint
+        states via pipe and also plots the movements of the robot for a visual representation.
+     """
 
     print("executing joint poses: ")
 
@@ -355,7 +420,7 @@ def execute_joint_poses(conn, poses, robot):
 
 def print_curr_joint(conn):
     """
-        this shares a connection 'conn' with multiprocessing() pipe.
+        this function shares a connection 'conn' with multiprocessing() pipe.
         receives updated joint position via pipe and prints the msg
     """
 
@@ -368,14 +433,28 @@ def print_curr_joint(conn):
         if np.array_equal(msg, x):
             print("> empty array received: (process ended)")
             break
+        # change this value to change the time interval of printing
         if interval >= 0.1:
-            print(f"joint states j0> {math.degrees(msg[0])}, j1> {math.degrees(msg[1])}")
+            print(f" d> 0.0, j0> {math.degrees(msg[0])}, j1> {math.degrees(msg[1])}, j2> 0.0")
             start_time = time.time()
 
 
+def execute_with_multiprocess(solved_joint_states_T_ini_to_work_start, robot_created, speed_of_execution):
+    """
+        This function all the solved joint states for the robot.
+        This method can be considered essentially sending all necessary values to a real robot
+        for executing on real motors and to display the joint states of the robot while system
+        is active.
+        I decided to use multiprocess so that the 2 process of running the robot and printing
+        the joint states can be decentralized. I used multiprocessing.Pipe() which is a connection
+        with 2 ends. the parent_conn executes the robot's movements and sends the value to the
+        child_conn to be printed. In a real robot some sensor can send the data over a network
+        connection on a central control and observation system.
 
-
-def execute_with_multiprocess(solved_joint_states_T_ini_to_work_start,robot_created):
+    :param solved_joint_states_T_ini_to_work_start:
+    :param robot_created:
+    :return:
+    """
 
     parent_conn, child_conn = multiprocessing.Pipe()
 
@@ -393,22 +472,25 @@ def execute_with_multiprocess(solved_joint_states_T_ini_to_work_start,robot_crea
 
 
 def main(argv):
-
+    """
+    receive arguments from command line for the name of 2 files
+    :param argv: <robot file> and <path point file>
+    :return:
+    """
     robot_file = ''
     path_file = ''
+    speed_of_execution = 1.0
     try:
         opts, args = getopt.getopt(argv, ["ifile=", "ofile="])
         print(f"args are: {opts} and {args}")
         if len(args) == 2:
             robot_file, path_file = args
     except getopt.GetoptError:
-        print('test.py -i <robot_file> -o <path_file>')
+        print('test.py <robot_file> <path_file>')
         sys.exit(2)
     print(f'\nrobot_file file is: {robot_file} path_file file is: {path_file}\n')
 
-
-
-    # robot_description = read_robot_description("robot_description.txt")
+    # robot_description is a varible to store the description from the robot_file
     robot_description = read_robot_description(robot_file)
 
     print(f"found valid description: \n{robot_description} \n ")
@@ -416,11 +498,9 @@ def main(argv):
     time.sleep(1)
     robot_created = create_robot(length0, length1, min0, max0, maxvel0, min1, max1, maxvel1)
 
-    # declare 2 points for creating path
-
     # building total trajectory in parts: initial position to start position
-    #                               start position to end position
-    #                               end position to initial position
+    # forward kinematics finds the position of the end-effector in cartesian space
+
     fk = robot_created.fkine(robot_created.qz2)
     print("fk:\n")
     print(fk.t)
@@ -432,10 +512,11 @@ def main(argv):
     p_work_start = []
     p_work_end = []
 
-
-    # work_path_points = read_path_description('path_point.txt')
+    # work_path_points is a variable to store the path description from path_file
     work_path_points = read_path_description(path_file)
 
+    # this will store solved joint stats for all the points in the total trajectory of the work
+    # excluding trajectory for initial-to-work_start and work_end-to-initial positions.
     solved_joint_states_work_path_points = []
 
     if work_path_points:
@@ -444,7 +525,7 @@ def main(argv):
         p_work_end = np.array(work_path_points[-1][3:6])
         print(f"p_work_start: {p_work_start}")
         print(f"p_work_end: {p_work_end}")
-        solved_joint_states_work_path_points = find_solved_joint_states_multiple_points(work_path_points,robot_created)
+        solved_joint_states_work_path_points = find_solved_joint_states_multiple_points(work_path_points, robot_created)
 
 
     else:
@@ -453,27 +534,12 @@ def main(argv):
     print(f"p_work_start: {p_work_start}")
     print(f"p_work_end: {p_work_end}")
 
-    T_ini_to_work_start = find_point2point_trajectory(p_ini,p_work_start,10)
+    T_ini_to_work_start = find_point2point_trajectory(p_ini, p_work_start, 10)
     # T_p0_p1 = find_point2point_trajectory(p0, p1, 10)
-    T_work_end_to_ini = find_point2point_trajectory(p_work_end,p_ini, 10)
-
-    # print(T_pini_p0)
-    # print(T_p0_p1)
-    # print(T_p1_pini)
-
-
+    T_work_end_to_ini = find_point2point_trajectory(p_work_end, p_ini, 10)
 
     solved_joint_states_T_ini_to_work_start = robot_created.solve_reachable_ikin(T_ini_to_work_start)
-    # print("solved_joint_states_T_pini_p0: \n ")
-    # print(solved_joint_states_T_ini_to_work_start)
-    # #
-    # solved_joint_states = robot_created.solve_reachable_ikin(T_p0_p1)
-    # print("solved_joint_states: \n ")
-    # print(solved_joint_states)
-
     solved_joint_states_T_work_end_to_ini = robot_created.solve_reachable_ikin(T_work_end_to_ini)
-    # print("solved_joint_states_T_p1_pini: \n")
-    # print(solved_joint_states_T_p1_pini)
 
     # combine all the trajectory to create a final trajectory:
     """
@@ -484,37 +550,40 @@ def main(argv):
         
     """
 
-    #step 1: from initial position to work_start position
+    # step 1: from initial position to work_start position
 
     vel_satisfied_T_ini_to_work_start = False
 
-    if len(solved_joint_states_T_ini_to_work_start)>1:
-        print(f"calling chk_joint_vel_satisfied: maxvel_j0: {robot_created.maxvel0}, maxvel_j1: {robot_created.maxvel1}")
-        vel_satisfied_T_ini_to_work_start = robot_created.chk_joint_vel_satisfied(solved_joint_states_T_ini_to_work_start, 1)
+    if len(solved_joint_states_T_ini_to_work_start) > 1:
+        print(
+            f"calling chk_joint_vel_satisfied: maxvel_j0: {robot_created.maxvel0}, maxvel_j1: {robot_created.maxvel1}")
+        vel_satisfied_T_ini_to_work_start = robot_created.chk_joint_vel_satisfied(
+            solved_joint_states_T_ini_to_work_start, speed_of_execution)
         print(f"joint vel_satisfied_T_ini_to_work_start for all steps: {vel_satisfied_T_ini_to_work_start}")
     print(vel_satisfied_T_ini_to_work_start)
 
-    #step 2: from work_start position to work_end position
+    # step 2: from work_start position to work_end position
 
     vel_satisfied_work_path_points = False
 
-    if len(solved_joint_states_work_path_points)>1:
-        print(f"calling chk_joint_vel_satisfied: maxvel_j0: {robot_created.maxvel0}, maxvel_j1: {robot_created.maxvel1}")
-        vel_satisfied_work_path_points = robot_created.chk_joint_vel_satisfied(solved_joint_states_work_path_points, 1)
+    if len(solved_joint_states_work_path_points) > 1:
+        print(
+            f"calling chk_joint_vel_satisfied: maxvel_j0: {robot_created.maxvel0}, maxvel_j1: {robot_created.maxvel1}")
+        vel_satisfied_work_path_points = robot_created.chk_joint_vel_satisfied(solved_joint_states_work_path_points, speed_of_execution)
         print(f"joint velocity satisfied for all steps: {vel_satisfied_work_path_points}")
     print(vel_satisfied_work_path_points)
 
-    #step 3: from work_end position to initial position
+    # step 3: from work_end position to initial position
 
     vel_satisfied_T_work_end_to_ini = False
 
-    if len(solved_joint_states_T_work_end_to_ini)>1:
-        print(f"calling chk_joint_vel_satisfied: maxvel_j0: {robot_created.maxvel0}, maxvel_j1: {robot_created.maxvel1}")
-        vel_satisfied_T_work_end_to_ini = robot_created.chk_joint_vel_satisfied(solved_joint_states_T_work_end_to_ini, 1)
+    if len(solved_joint_states_T_work_end_to_ini) > 1:
+        print(
+            f"calling chk_joint_vel_satisfied: maxvel_j0: {robot_created.maxvel0}, maxvel_j1: {robot_created.maxvel1}")
+        vel_satisfied_T_work_end_to_ini = robot_created.chk_joint_vel_satisfied(solved_joint_states_T_work_end_to_ini,
+                                                                                speed_of_execution)
         print(f"joint vel_satisfied_T_work_end_to_ini for all steps: {vel_satisfied_T_work_end_to_ini}")
     print(vel_satisfied_T_work_end_to_ini)
-
-
 
     """
         if velocity condition is satisfied for all 3 steps of the trajectory within the limit of robot's 
@@ -525,43 +594,24 @@ def main(argv):
         step 3: from work_end position to initial position
     """
 
-    #step 1: from initial position to work_start position
-
+    # step 1: from initial position to work_start position
 
     print("movement execution will start in 3 seconds... ")
     time.sleep(3)
 
     if vel_satisfied_T_ini_to_work_start and vel_satisfied_work_path_points and vel_satisfied_T_work_end_to_ini:
-
         # step 1: from initial position to work_start position
 
-        execution = execute_with_multiprocess(solved_joint_states_T_ini_to_work_start,robot_created)
+        execution = execute_with_multiprocess(solved_joint_states_T_ini_to_work_start, robot_created, speed_of_execution)
         print(f" robot moved to work_start position: {execution}")
         # step 2: from work_start position to work_end position
 
-        execution1 = execute_with_multiprocess(solved_joint_states_work_path_points,robot_created)
+        execution1 = execute_with_multiprocess(solved_joint_states_work_path_points, robot_created, speed_of_execution)
         print(f" robot moved to work_start position: {execution1}")
 
         # step 3: from work_end position to initial position
-        execution2 = execute_with_multiprocess(solved_joint_states_T_work_end_to_ini, robot_created)
+        execution2 = execute_with_multiprocess(solved_joint_states_T_work_end_to_ini, robot_created, speed_of_execution)
         print(f" robot moved to init position: {execution2}")
-
-        # if execution and execution1 and execution2:
-        #
-        #     print(f"\ncombining all joint states for trajectory visualization:...")
-        #
-        #     all_joint_states = np.array([[1.5708, -1.5708, 0.0]])
-        #     all_joint_states = np.concatenate((all_joint_states, solved_joint_states_T_ini_to_work_start))
-        #     all_joint_states = np.concatenate((all_joint_states, solved_joint_states_work_path_points))
-        #     all_joint_states = np.concatenate((all_joint_states, solved_joint_states_T_work_end_to_ini))
-        #     all_joint_states = np.concatenate((all_joint_states,np.array([[1.5708, -1.5708, 0.0]])))
-        #
-        #     print(f" combining all joint states: successful")
-        #
-        #     print(f" starting plotting for visualization:...")
-        #
-        #     robot_created.plot_movement(all_joint_states)
-
 
 
 # Press the green button in the gutter to run the script.
