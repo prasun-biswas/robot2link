@@ -240,7 +240,9 @@ def find_solved_joint_states_multiple_points(work_path_points, robot_created):
         p0 = np.array([path[0], path[1], path[2]])
         p1 = np.array([path[3], path[4], path[5]])
         print(f"from p0: {p0} to p1: {p1}")
-        T_p0_p1 = find_point2point_trajectory(p0, p1, 10)
+        # I kept the value at 100 for (1/100) = 10 millimeter step size to deal with the low configuration computer
+        # try with higher value 1000 for precision of 1 millimeter step
+        T_p0_p1 = find_point2point_trajectory(p0, p1, 100)
         print(f"number of steps in Trajectory: {len(T_p0_p1)}")
         solved_joint_states = robot_created.solve_reachable_ikin(T_p0_p1)
 
@@ -396,7 +398,7 @@ def read_path_description(filename='path_point.txt', sep=' '):
     return all_path_points
 
 
-def execute_joint_poses(conn, poses, robot):
+def execute_joint_poses(conn, poses, robot, speed_of_execution):
     """
         executes the poses in a loop with a desired speed. this shares a connection 'conn' with
         multiprocessing() pipe. receives updated joint position via pipe and sends the joint
@@ -406,19 +408,20 @@ def execute_joint_poses(conn, poses, robot):
     print("executing joint poses: ")
 
     start_time = time.time()
+    sleep_time = 0.001/speed_of_execution
 
     for pose in poses:
         robot.plot(pose)
         robot._servo_j0.rotate(pose[0])
         robot._servo_j1.rotate(pose[1])
         conn.send(pose)
-        time.sleep(0.1)
+        time.sleep(sleep_time)
     x = np.array([], dtype=np.float64)
     conn.send(x)
     return
 
 
-def print_curr_joint(conn):
+def print_curr_joint(conn, speed_of_execution):
     """
         this function shares a connection 'conn' with multiprocessing() pipe.
         receives updated joint position via pipe and prints the msg
@@ -435,7 +438,7 @@ def print_curr_joint(conn):
             break
         # change this value to change the time interval of printing
         if interval >= 0.1:
-            print(f" d> 0.0, j0> {math.degrees(msg[0])}, j1> {math.degrees(msg[1])}, j2> 0.0")
+            print(f" d> {speed_of_execution}, j0> {math.degrees(msg[0])}, j1> {math.degrees(msg[1])}, j2> 0.0")
             start_time = time.time()
 
 
@@ -459,8 +462,8 @@ def execute_with_multiprocess(solved_joint_states_T_ini_to_work_start, robot_cre
     parent_conn, child_conn = multiprocessing.Pipe()
 
     p1 = multiprocessing.Process(target=execute_joint_poses,
-                                 args=(parent_conn, solved_joint_states_T_ini_to_work_start, robot_created))
-    p2 = multiprocessing.Process(target=print_curr_joint, args=(child_conn,))
+                                 args=(parent_conn, solved_joint_states_T_ini_to_work_start, robot_created, speed_of_execution))
+    p2 = multiprocessing.Process(target=print_curr_joint, args=(child_conn,speed_of_execution))
 
     p1.start()
     p2.start()
