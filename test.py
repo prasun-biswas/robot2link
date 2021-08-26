@@ -247,3 +247,78 @@ import math
 # 1.5 0.0 0.0 2.0 0.0 0.0
 # 2.0 0.0 0.0 2.0 1.0 0.0
 # 2.0 1.0 0.0 1.5 1.0 0.0
+
+import multiprocessing
+import time
+import os
+os.system("")
+
+
+# def hang():
+#     while True:
+#         print ('hanging..')
+#         time.sleep(10)
+
+def count(conn):
+    curr_count = 0
+    try:
+
+        for i in range(10):
+            curr_count+=1
+            conn.send(curr_count)
+            print("waiting")
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("stopping the count")
+        return
+
+def print_count(conn):
+    try:
+        while True:
+            msg = conn.recv()
+            print(f"current count {msg}")
+    except KeyboardInterrupt:
+        print("interruption received: stopping the count")
+        return
+
+
+def main():
+
+    parent, child = multiprocessing.Pipe()
+
+    p1 = multiprocessing.Process(target=count, args=(parent,))
+    p2 = multiprocessing.Process(target=print_count, args=(child,))
+    try:
+
+        p1.start()
+        p2.start()
+
+        p1.join()
+        p2.join()
+
+    except KeyboardInterrupt:
+        print("stopping all the process")
+        if p1.is_alive():
+            p1.terminate()
+        if p2.is_alive():
+            p2.terminate()
+
+        print("all the process stopped")
+
+    # try:
+    #     p.start()
+    #     time.sleep(10)
+    #     p.terminate()
+    #     p.join()
+    #     print ('main process exiting..')
+    # except KeyboardInterrupt:
+    #     if p.is_alive():
+    #         p.terminate()
+    #         # print("killed process")
+    #         CRED = '\033[91m'
+    #         CEND = '\033[0m'
+    #         print(CRED + "Error, does not compute!" + CEND)
+
+
+if __name__ == '__main__':
+    main()

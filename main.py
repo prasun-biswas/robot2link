@@ -9,6 +9,8 @@ from spatialmath import SE3
 from collections import OrderedDict
 import multiprocessing
 import motor
+import os
+os.system("")
 
 
 class R2Link(DHRobot):
@@ -210,10 +212,9 @@ def find_point2point_trajectory(p0, p1, step_size):
     # print(T0)
     # print("T1:")
     # print(T1)
-
     # print("Ts: \n")
     Ts = roboticstoolbox.tools.trajectory.ctraj(T0, T1, int(step))
-    # print(Ts)
+    print(Ts)
     # sol = robot.ikine_LM(Ts)
     print("\n")
     return Ts
@@ -240,9 +241,16 @@ def find_solved_joint_states_multiple_points(work_path_points, robot_created):
         p0 = np.array([path[0], path[1], path[2]])
         p1 = np.array([path[3], path[4], path[5]])
         print(f"from p0: {p0} to p1: {p1}")
+
+        ### THIS is IMPORTANT:
+        # the third argument is a int that represents Steps for precision on a scale of 1 meter.
         # I kept the value at 100 for (1/100) = 10 millimeter step size to deal with the low configuration computer
-        # try with higher value 1000 for precision of 1 millimeter step
-        T_p0_p1 = find_point2point_trajectory(p0, p1, 100)
+        # try with higher value 1000 for precision of 1 millimeter step means 1 meter distance requires 1/1000 = 1mm
+        # precision for each steps
+
+        T_p0_p1 = find_point2point_trajectory(p0, p1, 10)
+
+        ###
         print(f"number of steps in Trajectory: {len(T_p0_p1)}")
         solved_joint_states = robot_created.solve_reachable_ikin(T_p0_p1)
 
@@ -327,6 +335,7 @@ def read_robot_description(filename='robot_description.txt', sep=' '):
         fields = f.readline().split(sep=sep)
         print(f"successful data read from :{filename}")
         # print(fields)
+        f.close()
     except:
         print(f"failed data read from :{filename}")
         return None
@@ -368,7 +377,7 @@ def read_path_description(filename='path_point.txt', sep=' '):
         lines = f.readlines()
         print(f"successful data read from :{filename}")
         print(f"number of lines: {len(lines)}")
-
+        f.close()
     except:
         print(f"failed data read from :{filename}")
         return None
@@ -398,7 +407,7 @@ def read_path_description(filename='path_point.txt', sep=' '):
     return all_path_points
 
 
-def execute_joint_poses(conn, poses, robot, speed_of_execution):
+def execute_joint_poses(conn, poses, robot_created, speed_of_execution):
     """
         executes the poses in a loop with a desired speed. this shares a connection 'conn' with
         multiprocessing() pipe. receives updated joint position via pipe and sends the joint
@@ -407,17 +416,29 @@ def execute_joint_poses(conn, poses, robot, speed_of_execution):
 
     print("executing joint poses: ")
 
-    start_time = time.time()
-    sleep_time = 0.001/speed_of_execution
+    ## this try:except block is used assuming the process needs to be killed in a real robot operation
+    # if any error happens in the operation
+    try:
 
-    for pose in poses:
-        robot.plot(pose)
-        robot._servo_j0.rotate(pose[0])
-        robot._servo_j1.rotate(pose[1])
-        conn.send(pose)
-        time.sleep(sleep_time)
-    x = np.array([], dtype=np.float64)
-    conn.send(x)
+        # start_time = time.time()
+        sleep_time = 0.001/speed_of_execution
+
+        for pose in poses:
+            robot_created.plot(pose)
+            robot_created._servo_j0.rotate(pose[0])
+            robot_created._servo_j1.rotate(pose[1])
+            conn.send(pose)
+            time.sleep(sleep_time)
+        x = np.array([], dtype=np.float64)
+        conn.send(x)
+    except KeyboardInterrupt:
+        x = np.array([], dtype=np.float64)
+        conn.send(x)
+        CRED = '\033[91m'
+        CEND = '\033[0m'
+        print(CRED + "stopped due to interruption: execute_joint_poses()" + CEND)
+        sys.exit(1)
+
     return
 
 
@@ -456,7 +477,8 @@ def execute_with_multiprocess(solved_joint_states_T_ini_to_work_start, robot_cre
 
     :param solved_joint_states_T_ini_to_work_start:
     :param robot_created:
-    :return:
+    :return: true if process finished correctly, False if process interrupted/error occurs
+
     """
 
     parent_conn, child_conn = multiprocessing.Pipe()
@@ -464,12 +486,20 @@ def execute_with_multiprocess(solved_joint_states_T_ini_to_work_start, robot_cre
     p1 = multiprocessing.Process(target=execute_joint_poses,
                                  args=(parent_conn, solved_joint_states_T_ini_to_work_start, robot_created, speed_of_execution))
     p2 = multiprocessing.Process(target=print_curr_joint, args=(child_conn,speed_of_execution))
+    try:
 
-    p1.start()
-    p2.start()
+        p1.start()
+        p2.start()
 
-    p1.join()
-    p2.join()
+        p1.join()
+        p2.join()
+    except KeyboardInterrupt:
+        if p1.is_alive():
+            p1.terminate()
+        if p2.is_alive():
+            p2.terminate()
+        print("stopping all processes")
+        return False
 
     return True
 
@@ -601,25 +631,32 @@ def main(argv):
 
     print("movement execution will start in 3 seconds... ")
     time.sleep(3)
-
+    #
     if vel_satisfied_T_ini_to_work_start and vel_satisfied_work_path_points and vel_satisfied_T_work_end_to_ini:
         # step 1: from initial position to work_start position
 
         execution = execute_with_multiprocess(solved_joint_states_T_ini_to_work_start, robot_created, speed_of_execution)
         print(f" robot moved to work_start position: {execution}")
+
         # step 2: from work_start position to work_end position
+        execution1 = False
+        if execution:
 
-        execution1 = execute_with_multiprocess(solved_joint_states_work_path_points, robot_created, speed_of_execution)
-        print(f" robot moved to work_start position: {execution1}")
+            execution1 = execute_with_multiprocess(solved_joint_states_work_path_points, robot_created, speed_of_execution)
+            print(f" robot moved to work_end position: {execution1}")
 
-        # step 3: from work_end position to initial position
-        execution2 = execute_with_multiprocess(solved_joint_states_T_work_end_to_ini, robot_created, speed_of_execution)
-        print(f" robot moved to init position: {execution2}")
+        if execution1:
+            # step 3: from work_end position to initial position
+            execution2 = execute_with_multiprocess(solved_joint_states_T_work_end_to_ini, robot_created, speed_of_execution)
+            print(f" robot moved to init position: {execution2}")
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     # main()
     main(sys.argv[1:])
+    # robot_1 = R2Link()
+    # robot_1.plot()
+
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
