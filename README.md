@@ -6,6 +6,7 @@ goes along positive X axis by length1. At that point is the end effector of the 
 There are two parameters that specify a robot, length0 and length1. Both joints have minimum and maximum 
 positions and maximum velocities. Robots are specified in a file with the fields Length0 length1 min0 max0 maxvel0 min1 max1 maxvel1
 
+<img src="https://github.com/prasun-biswas/robot_two_link/blob/master/img/myrobot.gif" width="40" height="40" />
 
 # 
 The “read_robot_description()” method reads the description from “robot_description.txt” and checks if the description is valid, for example, the data type of the fields. Then, a robot is created and stored in the variable “robot_created” with the method “create_robot()”.  There are configurations for the robot’s initial pose. Then path description is read from “path_point.txt” with method “read_path_description()” and stored in the variable “work_path_points”. There are 3 major parts in generating the trajectory for the whole path. step 1: from initial position to work_start position, step 2: from work_start position to work_end position, step 3: from work_end position to initial position. The initial pose is set in configuration during initialization of the robot, “work_start” and “work_end” is generated from the “path_point.txt” with defined step_size. “step_size” is defined as ‘x’th division of unit ‘meter’. So, for creating path with 1mm step size along trajectory with method “find_point2point_trajectory()”, step_size will have a value of 1000 (1m/1000 = 1mm). 
